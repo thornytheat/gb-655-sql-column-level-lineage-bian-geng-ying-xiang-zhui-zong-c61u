@@ -7,6 +7,7 @@ import json
 
 from app import config, store
 from app.modules.m1_intake import ddl, reader, sheet
+from app.modules.m8_retire import service as retire
 
 
 def _schema_id(version_label: str, fields: list[dict]) -> str:
@@ -43,6 +44,8 @@ def ingest(rel_name: str) -> dict:
     """采信一份元数据文件，返回快照并写入 SQLite。"""
     path = config.resolve_sample(rel_name)
     raw = reader.read_meta_file(path)
+    # 已销毁内容换名重导也不复活原文
+    retire.guard_intake(raw.sha256, raw.name)
 
     if path.suffix.lower() == ".sql":
         parsed = ddl.parse_ddl(raw.lines)

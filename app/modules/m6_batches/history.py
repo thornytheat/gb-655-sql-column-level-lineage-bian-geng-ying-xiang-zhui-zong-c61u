@@ -25,6 +25,7 @@ def summary_of(run: dict) -> dict:
         "consumers": counts.get("consumers", 0),
         "balanced": bool(balanced.get("all")),
         "reused": bool(run.get("reused")),
+        "retired": bool(run.get("retired")),
         "warnings": len(run.get("warnings") or []),
     }
 

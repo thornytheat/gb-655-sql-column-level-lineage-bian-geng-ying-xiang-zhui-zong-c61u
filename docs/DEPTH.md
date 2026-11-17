@@ -1,6 +1,6 @@
 # 深度登记 lineageguard
 
-- 规模：中型（7 个功能模块，76 个文件，65 条测试）
+- 规模：中型（8 个功能模块，90 个文件，98 条测试）
 - 核心规则：SQL 别名源列先解析成列级边，依赖图通过环检测后再计算反向影响闭包。
 - 使用者与工作流：数仓开发在列改名或删除前，复核受影响的模型、任务与报表。
 
@@ -15,6 +15,7 @@
 | M5 影响面 | 解析列级边并查看下游影响、环、断链 | POST /api/lineage | `app/modules/m5_impact/handler.py` `app/modules/m5_impact/sql_lineage.py` `app/modules/m5_impact/closure.py` `app/modules/m5_impact/cycle.py` `app/modules/m5_impact/broken.py` | `tests/test_m5_impact.py` `tests/test_sql_lineage.py` |
 | M6 版本批次 | 跑批次、看历史、验陈旧拒绝与区间重叠 | POST /api/runs | `app/modules/m6_batches/handler.py` `app/modules/m6_batches/service.py` `app/modules/m6_batches/window.py` `app/modules/m6_batches/guard.py` `app/modules/m6_batches/history.py` | `tests/test_m6_batches.py` |
 | M7 迁移单 | 出带列级证据的单一迁移清单 | GET /api/export/evidence.csv | `app/modules/m7_migration/handler.py` `app/modules/m7_migration/service.py` `app/modules/m7_migration/csv_out.py` `app/modules/m7_migration/ledger.py` | `tests/test_m7_migration.py` |
+| M8 原文销毁 | 到期销毁批次原文，留列级证据与销毁凭据，回读清理进度 | POST /api/retire | `app/modules/m8_retire/handler.py` `app/modules/m8_retire/service.py` `app/modules/m8_retire/evidence.py` `app/modules/m8_retire/purge.py` `app/modules/m8_retire/certificate.py` | `tests/test_m8_retire.py` |
 
 ## 陷阱登记
 
@@ -30,6 +31,9 @@
 | TRAP-22 | 同一字段被连续改过两次名 | 只认最近一跳，最早的名字解析不到 | 跨版本改名链一路解析到底 | `app/modules/m4_mapping/rename.py` | `tests/test_m4_mapping.py::test_trap22_alias_chain_resolves_multi_hop` |
 | TRAP-25 | 两个版本生效区间重叠 | 取到哪版看运气 | 半开区间比较，重叠直接标记警告 | `app/modules/m6_batches/window.py` | `tests/test_m6_batches.py::test_trap25_overlap_flagged_but_adjacent_clean` |
 | TRAP-26 | 基于旧版本号提交 | 后提交无条件覆盖新结果 | 版本号乐观锁，基线落后即 409 | `app/modules/m6_batches/guard.py` | `tests/test_m6_batches.py::test_trap26_stale_submission_rejected` |
+| TRAP-27 | 销毁到一半进程中断 | 重跑要么重复登记要么漏步骤 | 步骤级台账先查后做，动作幂等，断点续跑 | `app/modules/m8_retire/service.py` | `tests/test_m8_retire.py::test_retire_resume_after_interruption` |
+| TRAP-28 | 已销毁内容换文件名重新导入 | 按文件名判重，换名即复活 | 按内容摘要登记销毁，采信与跑批双卡口 | `app/modules/m8_retire/service.py` `app/store.py` | `tests/test_m8_retire.py::test_rerun_and_renamed_reimport_never_revive` |
+| TRAP-29 | 跑批与销毁并发，待销毁内容被重新写入 | 先查后写中间有空窗 | 销毁登记与跑批写入同一把锁内判定 | `app/store.py` | `tests/test_m8_retire.py::test_pending_destruction_rejects_concurrent_rerun` |
 
 ## 对账规则
 

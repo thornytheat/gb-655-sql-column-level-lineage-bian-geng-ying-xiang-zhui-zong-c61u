@@ -49,6 +49,11 @@ CODES: dict[str, tuple[str, str]] = {
     "VERSION_APPLIED": ("版本已登记", "info"),
     "RUN_REUSED": ("同一输入命中已算批次", "info"),
     "WINDOW_INVERTED": ("生效区间起点不早于终点", "break"),
+    # 销毁
+    "RUN_RETIRED": ("批次原文已销毁，拒绝重新写入", "break"),
+    "INPUT_DESTROYED": ("输入内容已登记销毁", "break"),
+    "EVIDENCE_FROZEN": ("列级证据已冻结", "info"),
+    "RETIRE_COMPLETED": ("原文销毁完成，已不可回读", "info"),
     # 结论
     "COMPATIBLE": ("兼容", "info"),
     "COMPATIBLE_BY_MAPPING": ("加别名后兼容", "warn"),

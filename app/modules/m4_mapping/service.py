@@ -6,6 +6,7 @@ import json
 
 from app import config, errors, manifest
 from app.modules.m4_mapping import mapping, rename, sqlalias
+from app.modules.m8_retire import service as retire
 
 
 def load_refs(rel_path: str) -> dict:
@@ -14,6 +15,8 @@ def load_refs(rel_path: str) -> dict:
         payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
         raise errors.BadInput("下游登记文件无法解析", detail={"reason": exc.msg})
+    # 已销毁内容换名重导也不复活原文
+    retire.guard_intake(manifest.sha256_file(path), path.name)
     raw = payload.get("consumers")
     if not isinstance(raw, list):
         raise errors.BadInput("下游登记缺少 consumers 列表", detail={"file": path.name})

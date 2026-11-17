@@ -55,12 +55,25 @@ docker compose up -d --build
 | GET | `/api/export/refs.csv` | 引用账 CSV |
 | GET | `/api/export/ledger.csv` | 账目 CSV |
 | GET | `/api/export/manifest.json` | 运行清单 |
+| POST | `/api/retire` | 销毁批次原文；同一批次重复调用返回同一任务，中断后调用即恢复 |
+| GET | `/api/retire` | 销毁任务列表 |
+| GET | `/api/retire/{job_id}` | 清理进度回读：步骤台账、路径核对、证据与凭据 |
+| GET | `/api/retire/{job_id}/evidence/{run_id}` | 冻结的列级证据（不含原文），迁移争议核查影响路径用 |
+
+## 5.1 销毁语义
+
+- 顺序：登记待销毁摘要 → 冻结列级证据 → 清除原文（批次载荷、快照副本、隔离区、输入文件）→ 出具凭据。证据未冻结不清除。
+- 共用同一输入内容（按 SHA-256）的批次进入同一销毁任务，一并冻结、一并清除。
+- 输入内容摘要一经登记，跑批（`POST /api/runs`）与采信（`POST /api/schemas/import`）一律 409，换文件名重导同样拦截。
+- 凭据 `fingerprint` 可对凭据正文（不含 fingerprint 字段）重算 SHA-256 校验；`verify.paths_match=true` 表示清理路径与原批次登记路径一致。
 
 ## 6 失败处置
 
 | 现象 | 原因 | 处置 |
 |---|---|---|
 | 409 `VERSION_STALE` | 提交带的基线序号落后 | 去掉 `base_version_seq` 或填当前序号 |
+| 409 `RUN_RETIRED` | 批次原文已销毁或销毁中 | 不可重跑；用 `GET /api/retire/{job_id}` 查凭据与证据 |
+| 409 `INPUT_DESTROYED` | 输入内容已登记销毁（含换名重导） | 不可复活原文；核查销毁任务与凭据 |
 | 400 `WINDOW_INVERTED` | 生效区间起点不早于终点 | 检查 `effective_from` / `effective_to` |
 | 400 `BAD_INPUT` | 文件名、参数或 JSON 结构不对 | 看返回的 `detail` |
 | 404 `NOT_FOUND` | 还没跑过批次 | 先在 `/batches` 点「跑一次」 |

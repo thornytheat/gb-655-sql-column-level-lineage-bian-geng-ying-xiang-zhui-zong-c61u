@@ -13,6 +13,7 @@ from app.modules.m4_mapping import service as mapping
 from app.modules.m5_impact import service as impact
 from app.modules.m6_batches import guard, history, window as window_mod
 from app.modules.m7_migration import service as migration
+from app.modules.m8_retire import service as retire
 
 
 def _ref_counts(consumers: list[dict]) -> dict:
@@ -84,6 +85,9 @@ def execute(old_file: str = config.DEFAULT_OLD, new_file: str = config.DEFAULT_N
     key = manifest_mod.batch_key(digests, {"window": window_key, **params},
                                  config.RULESET_VERSION)
 
+    # 销毁守卫：待销毁/已销毁内容既不复用也不重新写入，换名重导同罪
+    retire.guard_batch(key, digests)
+
     # 陈旧提交先拒：基线落后时，连复用都不该给
     guard.check_stale(base_version_seq, store.current_version_seq())
 
@@ -150,15 +154,29 @@ def execute(old_file: str = config.DEFAULT_OLD, new_file: str = config.DEFAULT_N
         "reused": False,
     }
     run["summary"] = history.summary_of(run)
-    store.save_run(run)
+    conflict = store.save_run_if_clean(run)
+    if conflict is not None:
+        # 与销毁登记同锁判定：跑到这里才被拦，说明守卫检查后有人发起了销毁
+        raise errors.Conflict(
+            "批次原文已销毁，拒绝重新写入" if conflict["reason"] == "RUN_RETIRED"
+            else "输入内容已登记销毁，换名重导也不复活原文",
+            detail=conflict,
+        )
     return run
 
 
 def ensure_seeded() -> dict | None:
-    """启动时把样例跑一遍，页面打开就有数据；已有批次则不重复。"""
+    """启动时把样例跑一遍，页面打开就有数据；已有批次则不重复。
+
+    样例输入若已登记销毁或文件已清除，跳过播种而不是复活原文。
+    """
     if store.count_runs() > 0:
         return store.latest_run()
-    run = execute()
+    try:
+        run = execute()
+    except (errors.Conflict, errors.NotFound) as exc:
+        store.set_kv("seed_skipped", {"reason": exc.code, "message": exc.message})
+        return None
     store.set_kv("seeded", {"run_id": run["run_id"], "version_seq": run["version_seq"]})
     return run
 
